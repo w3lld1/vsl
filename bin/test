@@ -82,6 +82,15 @@ flags="${flags} -d vsl_vcl_dlopencl -cc gcc"
 # Also hide the vulkan module tests on macOS — the dlopen path still
 # generates linker references that can't be resolved without libvulkan.
 hidden_tests=()
+restore_hidden_tests() {
+    for f in "${hidden_tests[@]}"; do
+        if [[ -e "${f}.skip" && ! -e "$f" ]]; then
+            mv "${f}.skip" "$f"
+        fi
+    done
+}
+trap restore_hidden_tests EXIT
+
 # CUDA *_test.v require -d cuda and GPU libs; skip unless --use-cuda.
 if [[ -z "${use_cuda}" ]]; then
     while IFS= read -r -d '' f; do
@@ -98,12 +107,13 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 
 echo "Executing tests with command: \"v ${flags} test .\""
+set +e
 v ${flags} test "${vsl_dir_path}"
 test_exit=$?
+set -e
 
-for f in "${hidden_tests[@]}"; do
-    mv "${f}.skip" "$f"
-done
+restore_hidden_tests
+trap - EXIT
 
 # Vulkan: manual integration (not in default `v test` — avoids v_stable_sort crash).
 if [[ -n "${use_vulkan}" && "$(uname -s)" != "Darwin" ]]; then
